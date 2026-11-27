@@ -1,16 +1,9 @@
 """Main application shell and navigation."""
-from __future__ import annotations
-
 from pathlib import Path
 
 from PySide6.QtWidgets import (
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QPushButton,
-    QStackedWidget,
-    QVBoxLayout,
-    QWidget,
+    QHBoxLayout, QLabel, QMainWindow, QPushButton, QStackedWidget,
+    QVBoxLayout, QWidget,
 )
 
 from sentinel.storage.database import Database
@@ -32,7 +25,7 @@ class MainWindow(QMainWindow):
         self.scans = ScanRepository(database)
         self.trust = TrustRepository(database)
 
-        self.setWindowTitle("Sentinel - Analysis Support")
+        self.setWindowTitle("SENTINEL — Analysis Support")
         self.resize(1120, 760)
         self.setMinimumSize(820, 580)
 
@@ -42,7 +35,6 @@ class MainWindow(QMainWindow):
 
         root = QWidget()
         outer = QVBoxLayout(root)
-
         header = QLabel("SENTINEL  /  FILE ANALYSIS SUPPORT")
         header.setObjectName("Header")
         outer.addWidget(header)
@@ -50,6 +42,7 @@ class MainWindow(QMainWindow):
         body = QHBoxLayout()
         sidebar = QVBoxLayout()
         self.stack = QStackedWidget()
+        self.nav_buttons = []
 
         self.pages = [
             Dashboard(self.scans.count(), len(self.trust.list_all()), lambda: self.navigate(1)),
@@ -58,7 +51,6 @@ class MainWindow(QMainWindow):
             TrustView(self.trust),
             SettingsView(),
         ]
-
         labels = ["Dashboard", "File Scanner", "Reports", "Trust Registry", "Settings"]
         for index, (label, page) in enumerate(zip(labels, self.pages)):
             button = QPushButton(label)
@@ -66,13 +58,13 @@ class MainWindow(QMainWindow):
             button.setCheckable(True)
             button.clicked.connect(lambda _checked=False, i=index: self.navigate(i))
             sidebar.addWidget(button)
+            self.nav_buttons.append(button)
             self.stack.addWidget(page)
 
         sidebar.addStretch()
         body.addLayout(sidebar, 1)
         body.addWidget(self.stack, 5)
         outer.addLayout(body, 1)
-
         footer = QLabel("Analysis support only  •  Unknown is not clean  •  No automatic file actions")
         footer.setObjectName("Footer")
         outer.addWidget(footer)
@@ -81,5 +73,26 @@ class MainWindow(QMainWindow):
         self.navigate(0)
 
     def navigate(self, index: int) -> None:
-        if 0 <= index < self.stack.count():
-            self.stack.setCurrentIndex(index)
+        if not 0 <= index < self.stack.count():
+            return
+        self.stack.setCurrentIndex(index)
+        for i, button in enumerate(self.nav_buttons):
+            button.setChecked(i == index)
+        # Refresh the dashboard and history when visited, so displayed counts/data
+        # reflect the current database rather than the window's initial snapshot.
+        if index == 0:
+            old = self.pages[0]
+            replacement = Dashboard(self.scans.count(), len(self.trust.list_all()), lambda: self.navigate(1))
+            self.stack.removeWidget(old)
+            old.deleteLater()
+            self.pages[0] = replacement
+            self.stack.insertWidget(0, replacement)
+            self.stack.setCurrentIndex(0)
+        elif index == 2:
+            old = self.pages[2]
+            replacement = ReportView(self.scans)
+            self.stack.removeWidget(old)
+            old.deleteLater()
+            self.pages[2] = replacement
+            self.stack.insertWidget(2, replacement)
+            self.stack.setCurrentIndex(2)
